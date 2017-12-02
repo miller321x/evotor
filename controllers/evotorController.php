@@ -132,6 +132,8 @@ class evotorController extends Controller
     public function statDataEmployers($App,$api) {
 
 
+
+
     }
 
 
@@ -157,7 +159,62 @@ class evotorController extends Controller
     private function createTokenApp($App,$api) {
 
 
+        if(isset($this->raw->userId)) {
 
+
+            $user = Evotor_users::findFirstByEvotor_uid($this->raw->userId);
+
+            if(isset($user->id)) {
+
+                $token = Evotor_tokens::findFirstByUid($user->uid);
+
+                if(isset($token->id)) {
+
+                    if($token->token != $this->raw->token) {
+
+                        $token->token = $this->raw->token;
+
+                        $token->save();
+
+                    } else {
+
+                        $token = $token->token;
+
+                    }
+
+
+                } else {
+
+                    $token = Evotor_tokens::addNewTokenApp($this->raw, $api,$user->uid);
+                }
+
+
+                JSON::buildJsonContent(
+                    $token,
+                    'ok'
+
+                );
+
+
+            } else {
+
+                JSON::buildJsonContent(
+                    'client user undefined',
+                    'error'
+
+                );
+
+            }
+
+
+        } else {
+
+            JSON::buildJsonContent(
+                'client id is required',
+                'error'
+
+            );
+        }
 
 
     }
@@ -207,7 +264,33 @@ class evotorController extends Controller
 
 
 
+        if($App->uid) {
 
+
+            $App->constructor = 1;
+
+            $App->evotor_user = null;
+
+            $this->com_id = $App->userProfile['company_id'];
+
+
+            if(count($this->raw) > 0) {
+
+                $this->importUsers($api, $App, $this->raw);
+
+
+            }
+
+
+        } else {
+
+            JSON::buildJsonContent(
+                'access denied',
+                'error'
+
+            );
+
+        }
 
 
     }
@@ -215,6 +298,27 @@ class evotorController extends Controller
 
     public function updateStores($App,$api) {
 
+
+        if($App->uid) {
+
+            $this->com_id = $App->userProfile['company_id'];
+
+            if(count($this->raw) > 0) {
+
+                $this->importStores($api, $App, $this->raw);
+
+            }
+
+
+        } else {
+
+            JSON::buildJsonContent(
+                'access denied',
+                'error'
+
+            );
+
+        }
 
 
 

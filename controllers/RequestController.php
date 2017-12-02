@@ -24,7 +24,100 @@ class RequestController extends Controller
 
     public function register($App,$api) {
 
+        /*
 
+        $ip = self::getIp();
+
+        if($App->uid) {
+
+            $request = Requests::findFirstByUid($App->uid);
+
+        } else {
+
+
+            $request = Requests::findFirstByIp($ip);
+        }
+
+        if(!isset($request->id)) {
+
+            Requests::newRequest($App,$api,$ip);
+
+        } else {
+
+            $date = new DateTime();
+
+            $date = $date->getTimestamp();
+
+
+            if($request->status == 1) {
+
+
+
+                $offset =  $this->blocked_time - ($date - $request->micro_interval);
+
+                if($offset > 0) {
+
+                    JSON::buildJsonContent(
+                        'access blocked on '.$offset.' seconds',
+                        'error'
+
+                    );
+
+                } else {
+
+                    $request->micro_interval = $date;
+
+                    $request->micro_interval_count = 0;
+
+                    $request->status = 0;
+
+                    $request->save();
+
+                }
+
+
+
+            } else {
+
+                $offset = $date - $request->micro_interval;
+
+                if($offset < $this->micro_interval) {
+
+                    if(($request->micro_interval_count + 1) >= $this->total_count) {
+
+                        $request->status = 1;
+
+                        $request->save();
+
+                        JSON::buildJsonContent(
+                            'access blocked on '.$this->blocked_time.' seconds',
+                            'error'
+
+                        );
+
+                    } else {
+
+                        $request->micro_interval_count = $request->micro_interval_count + 1;
+
+                        $request->save();
+
+                    }
+
+                } else {
+
+                    $request->micro_interval = $date;
+
+                    $request->micro_interval_count = 0;
+
+                    $request->save();
+
+                }
+
+            }
+
+
+        }
+        */
 
     }
 
