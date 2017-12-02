@@ -329,6 +329,185 @@ class evotorController extends Controller
     private function createClientUser($App,$api) {
 
 
+        if(isset($this->raw->userId)) {
+
+            $client_id = $this->raw->userId;
+
+            $App->evotor_user = $client_id;
+
+            $user = Evotor_users::findFirstByEvotor_uid($client_id);
+
+            if(!isset($user->id)) {
+
+
+                $App->constructor = 1;
+
+
+                # create new user admin
+
+
+
+                $data = [
+
+                    "company_id" => 0,
+
+                    "name" => $this->raw->name,
+
+                    "full_name" => $this->raw->name_second,
+
+                    "third_name" => "",
+
+                    "email" => $this->raw->email,
+
+                    "start_work" => "0000-00-00",
+                ];
+
+                $opt = JSON::object($data);
+
+                $App->activate = 1;
+
+                $uid = Users::addNewUser($opt, $api, $App, 'admin');
+
+
+
+
+
+                # create company
+
+                $data = [
+
+                    "owner_id" => $uid,
+
+                    "company_name" => "",
+
+                    "company_image" => "",
+
+                    "global_reting" => 0,
+
+                    "email" => $this->raw->email,
+
+                    "admin_panel" => "http://app.gamificationlab.ru"
+
+                ];
+
+                $opt = JSON::object($data);
+
+                $this->com_id = Companies::addNewCompany($opt, $api, $App);
+
+
+                $user = Users::findFirstById($uid);
+
+                $user->company_id = $this->com_id;
+
+                $user->save();
+
+
+
+                # create configurate
+
+                $this->createConfigurate($api, $App);
+
+
+
+                # create categories
+
+                $this->createCategories($api, $App);
+
+
+
+                # create evator client
+
+                $opt = [];
+
+                $opt['userId'] = $this->raw->userId;
+
+                $opt['uid'] = $uid;
+
+                $opt['com_id'] = $this->com_id;
+
+                $opt['type'] = 'client';
+
+                $opt = JSON::object($opt);
+
+                Evotor_users::addNewUserApp($opt, $api);
+
+
+
+                # import users
+
+                if(isset($this->raw->employees)) {
+
+                    if(count($this->raw->employees) > 0) {
+
+                        $App->evotor_user = null;
+
+                        $this->importUsers($api, $App, $this->raw->employees);
+
+                    }
+
+                }
+
+
+
+
+                # create connect
+
+                $id_conn = $this->createConnect($api);
+
+
+
+                # create params
+
+                $this->createParams($api, $App, $id_conn);
+
+
+                # create points
+
+                $this->createPoints($api, $App);
+
+
+
+                # create achieves
+
+                Gem_achieves::exportBasicAchieves($api,$this->com_id);
+
+
+
+
+                # create game products
+
+                Products::exportBasicProducts($api,$this->com_id);
+
+
+
+                # create auth key
+
+                $user = Users::findFirstById($uid);
+
+                Auth::createAuth($user,$api,'token',$App);
+
+
+
+            } else {
+
+                JSON::buildJsonContent(
+                    'client app registred yet',
+                    'error'
+
+                );
+
+            }
+
+
+        } else {
+
+            JSON::buildJsonContent(
+                'registration data undefined',
+                'error'
+
+            );
+
+        }
 
 
     }
@@ -342,6 +521,9 @@ class evotorController extends Controller
 
 
 
+        $App->evotor_user = $this->raw->userId;
+
+        $App->loginAction($App,$api,'admin');
 
 
 
@@ -352,6 +534,67 @@ class evotorController extends Controller
     public function importStores($api, $App, $data) {
 
 
+        $App->response_view = false;
+
+        $this->com_id = $App->userProfile['company_id'];
+
+
+        foreach($data as $storeData) {
+
+
+
+            # create store link
+
+            $store = Evotor_stores::findFirstByEvotor_store($storeData->uuid);
+
+            if(!isset($store->id)) {
+
+
+                # create dep
+
+                $opt = [];
+
+                $opt['dep_name'] = $storeData->name;
+
+                $opt['dep_image'] = "";
+
+                $opt['company_id'] = $this->com_id;
+
+                $opt = JSON::object($opt);
+
+                $dep_id = Departments::addNewDepartment($opt,$api,$App);
+
+
+
+
+                # create link between dep and store
+
+                $opt = [];
+
+                $opt['evotor_store'] = $storeData->uuid;
+
+                $opt['dep_id'] = $dep_id;
+
+                $opt['company_id'] = $this->com_id;
+
+
+
+                $opt = JSON::object($opt);
+
+                Evotor_stores::addNewStoreApp($opt, $api);
+
+            } else {
+
+                $store = Departments::findFirstById($store->dep_id);
+
+                $store->dep_name = $storeData->name;
+
+                $store->save();
+
+
+            }
+
+        }
 
 
     }
@@ -359,6 +602,144 @@ class evotorController extends Controller
     public function importUsers($api, $App, $data) {
 
 
+        $App->response_view = false;
+
+        $this->com_id = $App->userProfile['company_id'];
+
+
+        foreach($data as $userData) {
+
+            $dep_id = 0;
+
+            $user = Evotor_users::findFirstByEvotor_uid($userData->uuid);
+
+            if(!isset($user->id)) {
+
+                # create store link
+
+                if(count($userData->stores) > 0) {
+
+
+                    for($i = 0; $i < count($userData->stores); $i++) {
+
+
+
+                        $store = Evotor_stores::findFirstByEvotor_store($userData->stores[$i]);
+
+                        if(!isset($store->id)) {
+
+
+                            # create dep
+
+                            $opt = [];
+
+                            $opt['dep_name'] = $userData->stores[$i];
+
+                            $opt['dep_image'] = "";
+
+                            $opt['company_id'] = $this->com_id;
+
+                            $opt = JSON::object($opt);
+
+                            $dep_id = Departments::addNewDepartment($opt,$api,$App);
+
+
+
+
+                            # create link between dep and store
+
+                            $opt = [];
+
+                            $opt['evotor_store'] = $userData->stores[$i];
+
+                            $opt['dep_id'] = $dep_id;
+
+                            $opt['company_id'] = $this->com_id;
+
+
+
+                            $opt = JSON::object($opt);
+
+                            Evotor_stores::addNewStoreApp($opt, $api);
+
+                        } else {
+
+                            $dep_id = $store->dep_id;
+                        }
+
+                    }
+
+
+
+                }
+
+
+
+                $opt = [
+
+                    "company_id" => $this->com_id,
+
+                    "name" => $userData->name,
+
+                    "full_name" => $userData->lastName,
+
+                    "third_name" => "",
+
+                    "email" => "",
+
+                    "dep_id" => $dep_id,
+
+                    "start_work" => "0000-00-00",
+
+                ];
+
+                $opt = JSON::object($opt);
+
+
+
+
+                $uid = Users::addNewUser($opt, $api, $App, 'gamer');
+
+
+
+                # create evator player
+
+                if($userData->role != 'ADMIN') {
+
+                    $type = 'player';
+
+                } else {
+
+                    $type = $userData->role;
+
+                }
+
+                $opt = [];
+
+                $opt['userId'] = $userData->uuid;
+
+                $opt['uid'] = $uid;
+
+                $opt['com_id'] = $this->com_id;
+
+                $opt['type'] = $type;
+
+                $opt['user_role'] = $userData->role;
+
+                $opt = JSON::object($opt);
+
+                Evotor_users::addNewUserApp($opt, $api);
+
+            }
+
+        }
+
+
+        $id_conn = Gem_api_connect::findFirstByCompany_id($this->com_id);
+
+        # create links users connects adn evator
+
+        $this->createLinks($api, $App, $id_conn->id);
 
 
     }
@@ -369,14 +750,170 @@ class evotorController extends Controller
     public function createConfigurate($api, $App) {
 
 
+        $options = [];
 
+        # create in config member menu module
+
+        $options[0] = [];
+
+        $options[0]['component'] = 'member_dashboard';
+
+        $options[0]['method'] = 'categories';
+
+        $options[0]['company'] = $this->com_id;
+
+
+        # create in config admin menu module
+
+        $options[1] = [];
+
+        $options[1]['component'] = 'admin_dashboard';
+
+        $options[1]['method'] = 'categories';
+
+        $options[1]['company'] = $this->com_id;
+
+
+        # create in config member ui
+
+        $options[2] = [];
+
+        $options[2]['component'] = 'member_dashboard';
+
+        $options[2]['method'] = 'ui';
+
+        $options[2]['company'] = $this->com_id;
+
+
+        # create in config admin ui
+
+        $options[3] = [];
+
+        $options[3]['component'] = 'admin_dashboard';
+
+        $options[3]['method'] = 'ui';
+
+        $options[3]['company'] = $this->com_id;
+
+
+        $options = JSON::object($options);
+
+
+        ConfigurateController::addConfigurate($api,$options);
 
     }
 
     public function createCategories($api, $App) {
 
 
+        $categories = [];
 
+        # create in menu rating shops
+
+        $categories[0] = [];
+
+        $categories[0]['class'] = 'main_menu';
+
+        $categories[0]['url'] = '/departments_ratings';
+
+        $categories[0]['company'] = $this->com_id;
+
+
+
+        # create in menu rating users
+
+        $categories[1] = [];
+
+        $categories[1]['class'] = 'main_menu';
+
+        $categories[1]['url'] = '/rating';
+
+        $categories[1]['company'] = $this->com_id;
+
+
+        # create in menu shop
+
+        $categories[2] = [];
+
+        $categories[2]['class'] = 'main_menu';
+
+        $categories[2]['url'] = '/shop';
+
+        $categories[2]['company'] = $this->com_id;
+
+
+        # create in menu achievements
+
+        $categories[3] = [];
+
+        $categories[3]['class'] = 'main_menu';
+
+        $categories[3]['url'] = '/achievements';
+
+        $categories[3]['company'] = $this->com_id;
+
+
+
+
+        # create in admin menu main page
+
+        $categories[4] = [];
+
+        $categories[4]['class'] = 'admin';
+
+        $categories[4]['url'] = '/';
+
+        $categories[4]['company'] = $this->com_id;
+
+
+        # create in admin menu company page
+
+        $categories[5] = [];
+
+        $categories[5]['class'] = 'admin';
+
+        $categories[5]['url'] = '/company';
+
+        $categories[5]['company'] = $this->com_id;
+
+
+        # create in admin menu players page
+
+        $categories[6] = [];
+
+        $categories[6]['class'] = 'admin';
+
+        $categories[6]['url'] = '/players';
+
+        $categories[6]['company'] = $this->com_id;
+
+
+        # create in admin menu shop page
+
+        $categories[7] = [];
+
+        $categories[7]['class'] = 'admin';
+
+        $categories[7]['url'] = '/shop';
+
+        $categories[7]['company'] = $this->com_id;
+
+
+        # create in admin menu achieves page
+
+        $categories[8] = [];
+
+        $categories[8]['class'] = 'admin';
+
+        $categories[8]['url'] = '/achieves';
+
+        $categories[8]['company'] = $this->com_id;
+
+
+        $categories = JSON::object($categories);
+
+
+        ConfigurateController::addBasicCategories($App, $api,$categories);
 
     }
 
@@ -384,15 +921,81 @@ class evotorController extends Controller
     public function createConnect($api) {
 
 
+        $options = [];
 
+        $options['com_id'] = $this->com_id;
+
+        $options['type'] = 2;
+
+        $options['name'] = "Evotor Connect";
+
+        $options['user_id'] = "employeeId";
+
+        $options = JSON::object($options);
+
+        return Gem_api_connect::addNewConnectAuto($options,$api);
 
 
     }
 
 
+
+
     public function createLinks($api, $App, $id_conn) {
 
 
+
+
+        $sql = "user_role != :user_role_client: AND user_role != :user_role_admin: AND company_id = :company_id:";
+
+        $bind = [];
+
+        $bind['user_role_client'] = 'client';
+
+        $bind['user_role_admin'] = 'ADMIN';
+
+        $bind['company_id'] = $this->com_id;
+
+
+        $users = Evotor_users::find(
+            [
+                $sql,
+
+                "bind" => $bind,
+
+            ]
+        );
+
+
+
+
+        if(count($users) > 0) {
+
+
+
+            foreach($users as $user) {
+
+
+                $options = [];
+
+                $options['uid'] = $user->uid;
+
+                $options['crm_user_id'] = $user->evotor_uid;
+
+                $options['connect_id'] = $id_conn;
+
+                $options = JSON::object($options);
+
+
+                Gem_api_user_id::addNewUserId($options,$api,$App);
+
+            }
+
+
+
+
+
+        }
 
 
     }
